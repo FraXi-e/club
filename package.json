@@ -1,0 +1,30 @@
+CREATE DATABASE iiit_nr_club_management;
+
+USE iiit_nr_club_management;
+
+CREATE TABLE clubs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    owner_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE memberships (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    club_id INT,
+    member_name VARCHAR(255),
+    member_email VARCHAR(255),
+    member_dept VARCHAR(255),
+    FOREIGN KEY (club_id) REFERENCES clubs(id)
+);
+
+CREATE TABLE events (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    details TEXT,
+    date DATETIME,
+    club_id INT,
+    FOREIGN KEY (club_id) REFERENCES clubs(id)
+);
