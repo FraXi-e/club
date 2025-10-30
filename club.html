@@ -510,9 +510,7 @@
 			theme: 'iiitnr.theme'
 		};
 
-		const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-			? 'http://localhost:5000/api'
-			: '/api';
+		const API_BASE = 'http://localhost:5000/api';
 		let backendAvailable = false;
 
 		// API helpers
@@ -835,7 +833,7 @@
 			if (n.includes('TSOC')) return badge('🧑‍💻', 'TECH', 'bg-gradient-to-br from-blue-500 to-cyan-600');
 			if (n.includes('MUN')) return badge('🌍', 'DEBATE', 'bg-gradient-to-br from-cyan-500 to-teal-600');
 			if (n.includes('SHUTTER BUG')) return badge('📷', 'PHOTO', 'bg-gradient-to-br from-amber-500 to-orange-600');
-			if (n.includes('CAPRICIO')) return badge('🎵', 'MUSIC', 'bg-gradient-to-br from-pink-500 to-rose-600');
+			if (n.includes('CAPRRICIO')) return badge('🎵', 'MUSIC', 'bg-gradient-to-br from-pink-500 to-rose-600');
 			if (n.includes('IGNITERS')) return badge('💃', 'DANCE', 'bg-gradient-to-br from-fuchsia-500 to-pink-600');
 			if (n.includes('CLUB DE THEATRE')) return badge('🎭', 'THEATRE', 'bg-gradient-to-br from-rose-500 to-red-600');
 			if (n.includes('AARAMBH') || n.includes('SPORT')) return badge('🏃', 'SPORTS', 'bg-gradient-to-br from-green-500 to-emerald-600');
@@ -1919,5 +1917,107 @@
 			}
 		}
 	</script>
-</body>
-</html>
+
+	<!-- AI Chat widget -->
+	<style>
+		/* Compact chat widget styles */
+		.ai-chat-button {
+			position: fixed;
+			right: 24px;
+			bottom: 24px;
+			width: 56px;
+			height: 56px;
+			border-radius: 50%;
+			background: linear-gradient(135deg,#4f46e5,#06b6d4);
+			color: white;
+			display:flex;
+			align-items:center;
+			justify-content:center;
+			box-shadow:0 6px 18px rgba(15,23,42,0.25);
+			cursor:pointer;
+			z-index: 9999;
+		}
+
+		.ai-chat-panel {
+			position: fixed;
+			right: 24px;
+			bottom: 96px;
+			width: 340px;
+			max-height: 70vh;
+			background: #fff;
+			border-radius: 12px;
+			box-shadow: 0 10px 30px rgba(2,6,23,0.2);
+			overflow: hidden;
+			display: none;
+			flex-direction: column;
+			z-index: 9999;
+			font-family: Inter, Arial, Helvetica, sans-serif;
+		}
+
+		.ai-chat-header { padding: 12px 14px; background: linear-gradient(90deg,#06b6d4,#4f46e5); color: white }
+		.ai-chat-body { padding: 12px; overflow:auto; flex:1 1 auto; background:#f7fafc }
+		.ai-chat-input-area { padding:10px; border-top:1px solid #e6edf3; display:flex; gap:8px; background:#fff }
+		.ai-input { flex:1 1 auto; padding:8px 10px; border-radius:8px; border:1px solid #cbd5e1 }
+		.ai-send { background:#4f46e5; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer }
+		.ai-msg { display:block; margin-bottom:10px; clear: both; max-width:82%; line-height:1.4 }
+		.ai-msg.user { background:#0ea5a4; color:white; padding:8px 10px; border-radius:12px 12px 0 12px; margin-left:auto }
+		.ai-msg.bot { background:#fff; color:#0f172a; padding:8px 10px; border-radius:12px 12px 12px 0; border:1px solid #e6edf3; margin-right:auto }
+	</style>
+
+	<div class="ai-chat-button" id="aiChatButton" title="Chat with AI">💬</div>
+	<div class="ai-chat-panel" id="aiChatPanel" aria-hidden="true">
+		<div class="ai-chat-header">
+			<strong>Club Assistant</strong>
+			<div style="font-size:12px;opacity:.9">Ask about clubs, events, or site help</div>
+		</div>
+		<div class="ai-chat-body" id="aiChatBody" role="log" aria-live="polite"></div>
+		<div class="ai-chat-input-area">
+			<input id="aiInput" class="ai-input" type="text" placeholder="Ask me anything..." />
+			<button id="aiSend" class="ai-send">Send</button>
+		</div>
+	</div>
+
+	<script>
+	(function(){
+		const btn = document.getElementById('aiChatButton');
+		const panel = document.getElementById('aiChatPanel');
+		const body = document.getElementById('aiChatBody');
+		const input = document.getElementById('aiInput');
+		const send = document.getElementById('aiSend');
+		let open = false;
+		btn.addEventListener('click', ()=>{
+			open = !open; panel.style.display = open ? 'flex' : 'none'; panel.setAttribute('aria-hidden', !open); if(open) input.focus();
+		});
+
+		function appendMessage(text, who){
+			const el = document.createElement('div'); el.className = 'ai-msg ' + who; el.textContent = text; body.appendChild(el); body.scrollTop = body.scrollHeight;
+		}
+
+		async function queryAI(message){
+			appendMessage(message, 'user'); appendMessage('Thinking...', 'bot');
+			const payload = { messages: [{ role: 'user', content: message }], model: 'gpt-3.5-turbo' };
+			try {
+				const res = await fetch('/api/chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
+				if(!res.ok) throw new Error('Server error ' + res.status);
+				const data = await res.json();
+				const last = body.querySelector('.ai-msg.bot:last-child'); if(last) last.remove();
+				let reply = '';
+				if(data && data.choices && data.choices[0] && data.choices[0].message) reply = data.choices[0].message.content;
+				else if(data && data.choices && data.choices[0] && data.choices[0].text) reply = data.choices[0].text;
+				else if(data && data.result) reply = data.result;
+				else reply = JSON.stringify(data);
+				appendMessage(reply, 'bot');
+			} catch (err) {
+				const last = body.querySelector('.ai-msg.bot:last-child'); if(last) last.remove();
+				appendMessage('Assistant unavailable. Run the backend or check network. Error: ' + (err.message||err), 'bot');
+			}
+		}
+
+		send.addEventListener('click', ()=>{ const v = input.value && input.value.trim(); if(!v) return; queryAI(v); input.value = ''; });
+		input.addEventListener('keypress', (e)=>{ if(e.key === 'Enter') send.click(); });
+		appendMessage('Hi! I can help with club info. Try: "What events are coming up?"', 'bot');
+	})();
+	</script>
+
+	</body>
+	</html>
