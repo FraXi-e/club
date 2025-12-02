@@ -14,12 +14,12 @@
 	<style>
 			   
 		body {
-	 background-image: url('IIIT NR.jpg');
-/* Replace with your image path */
-			background-size: cover; /* Fill the viewport */
-			background-position: center; /* Align image to left bottom */
-			background-repeat: no-repeat; /* Prevents tiling */
-			background-attachment: fixed; /* Keeps background fixed while scrolling */
+			/* IIIT NR campus background image */
+			background-image: url('IIIT NR.jpg');
+			background-size: cover;           /* Fill the viewport */
+			background-position: center;      /* Center the building */
+			background-repeat: no-repeat;     /* No tiling */
+			background-attachment: fixed;     /* Parallax-style fixed background */
 			min-height: 100vh;
 			margin: 0;
 			width: 100%;
@@ -77,7 +77,7 @@
 		}
 
 		body {
-			background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+			/* Keep layout sizing, background image is defined above */
 			min-height: 100vh;
 		}
 
@@ -510,7 +510,9 @@
 			theme: 'iiitnr.theme'
 		};
 
-		const API_BASE = 'http://localhost:5000/api';
+		const API_BASE = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+			? 'http://localhost:5000/api'
+			: '/api';
 		let backendAvailable = false;
 
 		// API helpers
@@ -721,13 +723,13 @@
 			return club;
 		}
 
-		async function addEventToClub(clubId, { title, description, date }) {
+		async function addEventToClub(clubId, { title, description, date, image }) {
 			if (backendAvailable) {
 				try {
-					const payload = { clubId, title, description, datetime: new Date(date).toISOString() };
+					const payload = { clubId, title, description, datetime: new Date(date).toISOString(), image };
 					const ev = await apiPost('/events', payload);
 					await loadFromBackendOrLocal();
-					return { id: String(ev.id || ev._id), title: ev.title, description: ev.description, date: ev.datetime, rsvpUserIds: ev.rsvps || [] };
+					return { id: String(ev.id || ev._id), title: ev.title, description: ev.description, date: ev.datetime, image: ev.image, rsvpUserIds: ev.rsvps || [] };
 				} catch (err) { 
 					console.warn('Backend add event failed, fallback local', err && err.message ? err.message : err); 
 				}
@@ -736,7 +738,7 @@
 			const clubs = await getClubs(); 
 			const club = clubs.find(c => c.id === String(clubId)); 
 			if (!club) return null;
-			const newEvent = { id: `e-${club.id}-${(club.events?.length || 0) + 1}`, title, description, date, rsvpUserIds: [] };
+			const newEvent = { id: `e-${club.id}-${(club.events?.length || 0) + 1}`, title, description, date, image: image || null, rsvpUserIds: [] };
 			club.events = club.events || []; 
 			club.events.push(newEvent); 
 			await saveClubs(clubs); 
@@ -778,10 +780,10 @@
 			return ev;
 		}
 
-		async function updateEvent(eventId, { title, description, date }) {
+		async function updateEvent(eventId, { title, description, date, image }) {
 			if (backendAvailable) {
 				try {
-					const payload = { title, description, datetime: new Date(date).toISOString() };
+					const payload = { title, description, datetime: new Date(date).toISOString(), image };
 					const updated = await apiPut(`/events/${eventId}`, payload);
 					await loadFromBackendOrLocal();
 					return updated;
@@ -798,6 +800,7 @@
 					ev.title = title; 
 					ev.description = description; 
 					ev.date = date;
+					if (typeof image !== 'undefined') ev.image = image;
 					await saveClubs(clubs);
 					return ev;
 				}
@@ -1140,6 +1143,53 @@
 			const totalMembers = clubs.reduce((sum, c) => sum + (c.memberIds?.length || 0), 0);
 			const totalEvents = clubs.reduce((sum, c) => sum + (c.events?.length || 0), 0);
 
+			// Build flattened events list for gallery (most recent first)
+			const allEvents = [];
+			clubs.forEach(c => {
+				(c.events || []).forEach(e => {
+					allEvents.push({
+						title: e.title,
+						description: e.description,
+						date: e.date,
+						image: e.image,
+						clubName: c.name
+					});
+				});
+			});
+			allEvents.sort((a, b) => {
+				const da = a.date ? new Date(a.date) : new Date(0);
+				const db = b.date ? new Date(b.date) : new Date(0);
+				return db - da;
+			});
+			const galleryEvents = allEvents.slice(0, 8);
+			const eventsHtml = galleryEvents.length
+				? galleryEvents.map(ev => `
+						<div class="card p-4 border-l-4 border-indigo-500 bg-white/80 dark:bg-slate-900/80">
+							${ev.image ? `<img src="${ev.image}" alt="${ev.title}" class="w-full h-36 object-cover rounded-xl mb-3 border border-gray-200 dark:border-gray-700">` : ''}
+							<div class="flex items-start justify-between gap-3 mb-2">
+								<div>
+									<h3 class="text-base font-bold text-gray-800 dark:text-white line-clamp-1">${ev.title}</h3>
+									<p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">${ev.description || ''}</p>
+								</div>
+							</div>
+							<div class="mt-3 flex items-center justify-between text-xs text-gray-600 dark:text-gray-400">
+								<span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 font-medium">
+									<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+										<path fill-rule="evenodd" d="M10 2a6 6 0 00-6 6v2a4 4 0 001 2.646V16a3 3 0 003 3h4a3 3 0 003-3v-3.354A4 4 0 0016 10V8a6 6 0 00-6-6z" clip-rule="evenodd" />
+									</svg>
+									<span class="truncate max-w-[140px]">${ev.clubName}</span>
+								</span>
+								<span class="inline-flex items-center gap-1">
+									<svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+										<path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 7a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1z" clip-rule="evenodd" />
+									</svg>
+									<span>${ev.date || 'Date TBA'}</span>
+								</span>
+							</div>
+						</div>
+					`).join('')
+				: `<p class="text-sm text-gray-500 dark:text-gray-400 col-span-full text-center py-6 italic">No events have been posted yet. Stay tuned for upcoming happenings at IIIT-NR!</p>`;
+
 			app.innerHTML = `
 				<section>
 					<div class="hero-section p-12 mb-8 shadow-2xl text-white relative" style="animation: fadeInUp 0.6s ease-out;">
@@ -1199,6 +1249,27 @@
 							</div>
 						</div>
 					</div>
+
+					<!-- Events Gallery Section -->
+					<section class="mt-10 mb-10" style="animation: fadeInUp 0.6s ease-out 0.3s both;">
+						<div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 mb-4">
+							<div>
+								<h2 class="text-3xl font-black text-gray-800 dark:text-white">IIIT-NR Events Gallery</h2>
+								<p class="text-sm text-gray-600 dark:text-gray-400 mt-1 max-w-2xl">
+									A quick glimpse of the vibrant events happening across all clubs at IIIT-NR.
+								</p>
+							</div>
+							<span class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 text-xs font-semibold uppercase tracking-wide">
+								<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v9a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1z" clip-rule="evenodd" />
+								</svg>
+								<span>Showing latest campus events</span>
+							</span>
+						</div>
+						<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+							${eventsHtml}
+						</div>
+					</section>
 
 					<div class="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
 						<h2 class="text-3xl font-black text-gray-800 dark:text-white animate-slide-in">Explore Clubs</h2>
@@ -1412,6 +1483,11 @@
 									<label class="label" for="event-description">Description</label>
 									<textarea class="input" id="event-description" rows="3" placeholder="Describe your event..." required></textarea>
 								</div>
+								<div class="md:col-span-2">
+									<label class="label" for="event-image">Event Image (optional)</label>
+									<input class="input" type="file" id="event-image" accept="image/*" />
+									<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Upload a photo from the event to show in the gallery.</p>
+								</div>
 								<div class="md:col-span-2 flex justify-end">
 									<button type="submit" class="btn bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white">
 										<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1520,6 +1596,11 @@
 												<label class="label">Description</label>
 												<textarea id="edit-event-desc" class="input" rows="4" required></textarea>
 											</div>
+											<div>
+												<label class="label">Event Image (optional)</label>
+												<input id="edit-event-image" class="input" type="file" accept="image/*" />
+												<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Leave empty to keep the current image.</p>
+											</div>
 											<div class="flex justify-end gap-3">
 												<button type="button" id="edit-cancel" class="btn bg-gray-200 hover:bg-gray-300 text-gray-800">Cancel</button>
 												<button type="submit" class="btn bg-indigo-600 hover:bg-indigo-700 text-white">
@@ -1546,7 +1627,13 @@
 									const newTitle = document.getElementById('edit-event-title').value.trim();
 									const newDesc = document.getElementById('edit-event-desc').value.trim();
 									const newDate = document.getElementById('edit-event-date').value;
-									await updateEvent(ev.id, { title: newTitle, description: newDesc, date: newDate });
+									const imageInput = document.getElementById('edit-event-image');
+									const file = imageInput && imageInput.files && imageInput.files[0];
+									let image;
+									if (file) {
+										image = await readImageFile(file);
+									}
+									await updateEvent(ev.id, { title: newTitle, description: newDesc, date: newDate, image });
 									closeOverlay();
 									renderClubDetail(id);
 								});
@@ -1617,10 +1704,17 @@
 			if (eventForm && club.leaderId === user?.id) {
 				eventForm.addEventListener('submit', async (e) => {
 					e.preventDefault();
+					const imageInput = document.getElementById('event-image');
+					const file = imageInput && imageInput.files && imageInput.files[0];
+					let image = null;
+					if (file) {
+						image = await readImageFile(file);
+					}
 					await addEventToClub(id, {
 						title: document.getElementById('event-name').value,
 						description: document.getElementById('event-description').value,
-						date: document.getElementById('event-date').value
+						date: document.getElementById('event-date').value,
+						image
 					});
 					renderClubDetail(id);
 					eventForm.reset();
@@ -1807,6 +1901,16 @@
 			router();
 		});
 
+		// Helper to read image files as data URLs for storage
+		function readImageFile(file) {
+			return new Promise((resolve, reject) => {
+				const reader = new FileReader();
+				reader.onload = () => resolve(reader.result);
+				reader.onerror = reject;
+				reader.readAsDataURL(file);
+			});
+		}
+
 		// Digital clocks
 		function pad(n) { return String(n).padStart(2, '0'); }
 		function updateDigitalClocks() {
@@ -1918,106 +2022,8 @@
 		}
 	</script>
 
-	<!-- AI Chat widget -->
-	<style>
-		/* Compact chat widget styles */
-		.ai-chat-button {
-			position: fixed;
-			right: 24px;
-			bottom: 24px;
-			width: 56px;
-			height: 56px;
-			border-radius: 50%;
-			background: linear-gradient(135deg,#4f46e5,#06b6d4);
-			color: white;
-			display:flex;
-			align-items:center;
-			justify-content:center;
-			box-shadow:0 6px 18px rgba(15,23,42,0.25);
-			cursor:pointer;
-			z-index: 9999;
-		}
-
-		.ai-chat-panel {
-			position: fixed;
-			right: 24px;
-			bottom: 96px;
-			width: 340px;
-			max-height: 70vh;
-			background: #fff;
-			border-radius: 12px;
-			box-shadow: 0 10px 30px rgba(2,6,23,0.2);
-			overflow: hidden;
-			display: none;
-			flex-direction: column;
-			z-index: 9999;
-			font-family: Inter, Arial, Helvetica, sans-serif;
-		}
-
-		.ai-chat-header { padding: 12px 14px; background: linear-gradient(90deg,#06b6d4,#4f46e5); color: white }
-		.ai-chat-body { padding: 12px; overflow:auto; flex:1 1 auto; background:#f7fafc }
-		.ai-chat-input-area { padding:10px; border-top:1px solid #e6edf3; display:flex; gap:8px; background:#fff }
-		.ai-input { flex:1 1 auto; padding:8px 10px; border-radius:8px; border:1px solid #cbd5e1 }
-		.ai-send { background:#4f46e5; color:white; border:none; padding:8px 12px; border-radius:8px; cursor:pointer }
-		.ai-msg { display:block; margin-bottom:10px; clear: both; max-width:82%; line-height:1.4 }
-		.ai-msg.user { background:#0ea5a4; color:white; padding:8px 10px; border-radius:12px 12px 0 12px; margin-left:auto }
-		.ai-msg.bot { background:#fff; color:#0f172a; padding:8px 10px; border-radius:12px 12px 12px 0; border:1px solid #e6edf3; margin-right:auto }
-	</style>
-
-	<div class="ai-chat-button" id="aiChatButton" title="Chat with AI">💬</div>
-	<div class="ai-chat-panel" id="aiChatPanel" aria-hidden="true">
-		<div class="ai-chat-header">
-			<strong>Club Assistant</strong>
-			<div style="font-size:12px;opacity:.9">Ask about clubs, events, or site help</div>
-		</div>
-		<div class="ai-chat-body" id="aiChatBody" role="log" aria-live="polite"></div>
-		<div class="ai-chat-input-area">
-			<input id="aiInput" class="ai-input" type="text" placeholder="Ask me anything..." />
-			<button id="aiSend" class="ai-send">Send</button>
-		</div>
-	</div>
-
-	<script>
-	(function(){
-		const btn = document.getElementById('aiChatButton');
-		const panel = document.getElementById('aiChatPanel');
-		const body = document.getElementById('aiChatBody');
-		const input = document.getElementById('aiInput');
-		const send = document.getElementById('aiSend');
-		let open = false;
-		btn.addEventListener('click', ()=>{
-			open = !open; panel.style.display = open ? 'flex' : 'none'; panel.setAttribute('aria-hidden', !open); if(open) input.focus();
-		});
-
-		function appendMessage(text, who){
-			const el = document.createElement('div'); el.className = 'ai-msg ' + who; el.textContent = text; body.appendChild(el); body.scrollTop = body.scrollHeight;
-		}
-
-		async function queryAI(message){
-			appendMessage(message, 'user'); appendMessage('Thinking...', 'bot');
-			const payload = { messages: [{ role: 'user', content: message }], model: 'gpt-3.5-turbo' };
-			try {
-				const res = await fetch('/api/chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify(payload) });
-				if(!res.ok) throw new Error('Server error ' + res.status);
-				const data = await res.json();
-				const last = body.querySelector('.ai-msg.bot:last-child'); if(last) last.remove();
-				let reply = '';
-				if(data && data.choices && data.choices[0] && data.choices[0].message) reply = data.choices[0].message.content;
-				else if(data && data.choices && data.choices[0] && data.choices[0].text) reply = data.choices[0].text;
-				else if(data && data.result) reply = data.result;
-				else reply = JSON.stringify(data);
-				appendMessage(reply, 'bot');
-			} catch (err) {
-				const last = body.querySelector('.ai-msg.bot:last-child'); if(last) last.remove();
-				appendMessage('Assistant unavailable. Run the backend or check network. Error: ' + (err.message||err), 'bot');
-			}
-		}
-
-		send.addEventListener('click', ()=>{ const v = input.value && input.value.trim(); if(!v) return; queryAI(v); input.value = ''; });
-		input.addEventListener('keypress', (e)=>{ if(e.key === 'Enter') send.click(); });
-		appendMessage('Hi! I can help with club info. Try: "What events are coming up?"', 'bot');
-	})();
-	</script>
-
-	</body>
-	</html>
+		<!-- Chatbot widget (external files) -->
+		<link rel="stylesheet" href="chatbot/widget.css">
+		<script src="chatbot/widget.js" defer></script>
+</body>
+</html>
